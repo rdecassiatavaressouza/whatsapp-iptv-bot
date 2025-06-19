@@ -10,9 +10,10 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(express.json());
 
-// Configuração OpenAI
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY
+// Configuração DeepSeek (compatível com OpenAI SDK)
+const deepseek = new OpenAI({
+    apiKey: process.env.DEEPSEEK_API_KEY,
+    baseURL: 'https://api.deepseek.com'
 });
 
 // Cliente WhatsApp
@@ -153,9 +154,9 @@ client.on('message', async (message) => {
             return;
         }
         
-        // Resposta com IA
-        const response = await openai.chat.completions.create({
-            model: "gpt-3.5-turbo",
+        // Resposta com DeepSeek
+        const response = await deepseek.chat.completions.create({
+            model: "deepseek-chat",
             messages: [
                 { role: "system", content: IPTV_CONTEXT },
                 { role: "user", content: userMessage }
@@ -224,6 +225,7 @@ async function notifyOwner(customerName, customerNumber, message) {
 app.get('/', (req, res) => {
     res.json({
         service: 'WhatsApp IPTV Bot',
+        ai_provider: 'DeepSeek',
         status: botStatus,
         connected_at: connectedAt,
         uptime: process.uptime(),
@@ -270,6 +272,7 @@ app.get('/health', (req, res) => {
     res.status(200).json({ 
         status: 'healthy',
         bot_status: botStatus,
+        ai_provider: 'DeepSeek',
         timestamp: new Date().toISOString()
     });
 });
@@ -277,6 +280,7 @@ app.get('/health', (req, res) => {
 // Inicializar servidor
 app.listen(PORT, () => {
     console.log(`🚀 Servidor rodando na porta ${PORT}`);
+    console.log(`🤖 IA: DeepSeek (Gratuita)`);
     console.log(`🌐 Health check: http://localhost:${PORT}/health`);
     console.log(`📱 QR Code: http://localhost:${PORT}/qr`);
 });

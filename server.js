@@ -68,7 +68,7 @@ Você é um assistente especializado em vendas de IPTV. Informações do serviç
 • 6 meses: R$ 330,00 (economize R$ 90)
 
 💰 FORMAS DE PAGAMENTO:
-- PIX (5% desconto)
+- PIX
 - Cartão de crédito
 - Transferência bancária
 

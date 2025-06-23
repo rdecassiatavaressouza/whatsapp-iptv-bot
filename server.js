@@ -1,21 +1,18 @@
 const express = require('express');
 const { Client, LocalAuth } = require('whatsapp-web.js');
-const { Groq } = require("groq-sdk");  // Alterado para Groq SDK
+const { Groq } = require("groq-sdk");
 const qrcode = require('qrcode-terminal');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
 app.use(express.json());
 
-// Configuração Groq (substitui DeepSeek)
 const groq = new Groq({
     apiKey: process.env.GROQ_API_KEY
 });
 
-// Cliente WhatsApp
 const client = new Client({
     authStrategy: new LocalAuth({
         dataPath: './session'
@@ -36,12 +33,10 @@ const client = new Client({
     }
 });
 
-// Status do bot
 let botStatus = 'Iniciando...';
 let qrCodeData = '';
 let connectedAt = null;
 
-// Contexto IPTV com seus valores
 const IPTV_CONTEXT = `
 Você é um assistente especializado em vendas de IPTV. Informações do serviço:
 
@@ -88,7 +83,6 @@ INSTRUÇÕES:
 Responda sempre em português brasileiro.
 `;
 
-// Eventos do WhatsApp
 client.on('qr', (qr) => {
     console.log('📱 QR Code gerado - Escaneie com WhatsApp');
     qrCodeData = qr;
@@ -114,9 +108,7 @@ client.on('disconnected', (reason) => {
     connectedAt = null;
 });
 
-// Processamento de mensagens
 client.on('message', async (message) => {
-    // Ignora mensagens de grupos e próprias mensagens
     if (message.from.includes('@g.us') || message.fromMe) return;
     
     const userMessage = message.body.trim();
@@ -124,11 +116,9 @@ client.on('message', async (message) => {
     
     console.log(`📩 ${contact.name || contact.number}: ${userMessage}`);
     
-    // Ignora mensagens vazias
     if (!userMessage) return;
     
     try {
-        // Palavras-chave para escalação humana
         const escalationKeywords = [
             'não funciona', 'problema', 'travando', 'erro', 'bug',
             'cancelar', 'reembolso', 'reclamação', 'suporte técnico',
@@ -148,14 +138,12 @@ client.on('message', async (message) => {
                 `📞 *Horário de atendimento:* 24 horas`
             );
             
-            // Notifica você
             await notifyOwner(contact.name || 'Sem nome', contact.number, userMessage);
             return;
         }
         
-        // Resposta com Groq (substitui DeepSeek)
         const response = await groq.chat.completions.create({
-            model: "llama3-8b-8192",  // Modelo gratuito e rápido
+            model: "llama3-8b-8192",
             messages: [
                 { role: "system", content: IPTV_CONTEXT },
                 { role: "user", content: userMessage }
@@ -166,7 +154,6 @@ client.on('message', async (message) => {
         
         const botResponse = response.choices[0].message.content.trim();
         
-        // Adiciona call-to-action se apropriado
         let finalResponse = botResponse;
         
         if (userMessage.toLowerCase().includes('preço') || 
@@ -180,7 +167,6 @@ client.on('message', async (message) => {
     } catch (error) {
         console.error('❌ Erro ao processar mensagem:', error);
         
-        // Tratamento específico para erro de saldo
         if (error.status === 402) {
             await message.reply(
                 "⚠️ *Serviço Temporariamente Indisponível*\n\n" +
@@ -205,7 +191,6 @@ client.on('message', async (message) => {
     }
 });
 
-// Notificar proprietário
 async function notifyOwner(customerName, customerNumber, message) {
     const ownerNumber = process.env.OWNER_PHONE;
     if (!ownerNumber) {
@@ -229,11 +214,10 @@ async function notifyOwner(customerName, customerNumber, message) {
     }
 }
 
-// Rotas Express para monitoramento
 app.get('/', (req, res) => {
     res.json({
         service: 'WhatsApp IPTV Bot',
-        ai_provider: 'Groq (Llama 3)',  // Atualizado
+        ai_provider: 'Groq (Llama 3)',
         status: botStatus,
         connected_at: connectedAt,
         uptime: process.uptime(),
@@ -275,29 +259,25 @@ app.get('/status', (req, res) => {
     });
 });
 
-// Health check para Render
 app.get('/health', (req, res) => {
     res.status(200).json({ 
         status: 'healthy',
         bot_status: botStatus,
-        ai_provider: 'Groq (Llama 3)',  // Atualizado
+        ai_provider: 'Groq (Llama 3)',
         timestamp: new Date().toISOString()
     });
 });
 
-// Inicializar servidor
 app.listen(PORT, () => {
     console.log(`🚀 Servidor rodando na porta ${PORT}`);
-    console.log(`🤖 IA: Groq (Llama 3 - Gratuito)`);  // Atualizado
+    console.log(`🤖 IA: Groq (Llama 3 - Gratuito)`);
     console.log(`🌐 Health check: http://localhost:${PORT}/health`);
     console.log(`📱 QR Code: http://localhost:${PORT}/qr`);
 });
 
-// Inicializar WhatsApp
 console.log('🔄 Inicializando WhatsApp...');
 client.initialize();
 
-// Tratamento de erros
 process.on('unhandledRejection', (reason, promise) => {
     console.error('❌ Unhandled Rejection:', reason);
 });

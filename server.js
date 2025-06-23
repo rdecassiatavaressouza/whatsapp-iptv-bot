@@ -286,3 +286,43 @@ process.on('uncaughtException', (error) => {
     console.error('❌ Uncaught Exception:', error);
     process.exit(1);
 });
+
+// Adicione esta rota no server.js:
+app.get('/dashboard', (req, res) => {
+  res.send(`
+    <h1>WhatsApp Bot Dashboard</h1>
+    <p>Status: ${botStatus}</p>
+    <p>Online desde: ${connectedAt || 'Não conectado'}</p>
+    <p><a href="/qr">Conectar WhatsApp</a></p>
+    <p><a href="/status">Ver status completo</a></p>
+  `);
+});
+
+const qrcode = require('qrcode');
+
+// Adicione esta rota:
+app.get('/qrcode', async (req, res) => {
+  if (!qrCodeData) {
+    return res.status(404).send('QR Code não disponível');
+  }
+  
+  try {
+    const qrImage = await qrcode.toDataURL(qrCodeData);
+    res.send(`
+      <img src="${qrImage}" alt="WhatsApp QR Code">
+      <p>Escaneie este código com seu WhatsApp</p>
+    `);
+  } catch (error) {
+    res.status(500).send('Erro ao gerar QR Code');
+  }
+});
+
+// No client initialization, adicione:
+const client = new Client({
+  authStrategy: new LocalAuth({
+    dataPath: './session',
+    clientId: "bot-iptv" // Adicione um ID único
+  }),
+  // ... resto do código
+});
+

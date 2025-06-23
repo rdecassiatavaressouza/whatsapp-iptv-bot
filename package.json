@@ -1,6 +1,9 @@
 {
   "name": "whatsapp-iptv-bot",
   "version": "1.0.0",
+  "engines": {
+    "node": "22.x"
+  },
   "dependencies": {
     "express": "^4.18.2",
     "whatsapp-web.js": "^1.25.1",

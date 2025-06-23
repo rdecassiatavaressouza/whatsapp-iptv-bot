@@ -1,6 +1,6 @@
 const express = require('express');
 const { Client, LocalAuth } = require('whatsapp-web.js');
-const OpenAI = require('openai');
+const { Groq } = require("groq-sdk");  // Alterado para Groq SDK
 const qrcode = require('qrcode-terminal');
 require('dotenv').config();
 
@@ -10,10 +10,9 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(express.json());
 
-// Configuração DeepSeek (compatível com OpenAI SDK)
-const deepseek = new OpenAI({
-    apiKey: process.env.DEEPSEEK_API_KEY,
-    baseURL: 'https://api.deepseek.com'
+// Configuração Groq (substitui DeepSeek)
+const groq = new Groq({
+    apiKey: process.env.GROQ_API_KEY
 });
 
 // Cliente WhatsApp
@@ -154,9 +153,9 @@ client.on('message', async (message) => {
             return;
         }
         
-        // Resposta com DeepSeek
-        const response = await deepseek.chat.completions.create({
-            model: "deepseek-chat",
+        // Resposta com Groq (substitui DeepSeek)
+        const response = await groq.chat.completions.create({
+            model: "llama3-8b-8192",  // Modelo gratuito e rápido
             messages: [
                 { role: "system", content: IPTV_CONTEXT },
                 { role: "user", content: userMessage }
@@ -181,13 +180,22 @@ client.on('message', async (message) => {
     } catch (error) {
         console.error('❌ Erro ao processar mensagem:', error);
         
-        await message.reply(
-            `⚠️ *Erro Temporário*\n\n` +
-            `Desculpe, tive um problema técnico momentâneo.\n` +
-            `Nossa equipe foi notificada automaticamente.\n\n` +
-            `🔄 Tente novamente em alguns segundos ou ` +
-            `nossa equipe entrará em contato.`
-        );
+        // Tratamento específico para erro de saldo
+        if (error.status === 402) {
+            await message.reply(
+                "⚠️ *Serviço Temporariamente Indisponível*\n\n" +
+                "Estamos ajustando nosso sistema de atendimento automático.\n" +
+                "Por favor, envie sua dúvida novamente em 10 minutos."
+            );
+        } else {
+            await message.reply(
+                `⚠️ *Erro Temporário*\n\n` +
+                `Desculpe, tive um problema técnico momentâneo.\n` +
+                `Nossa equipe foi notificada automaticamente.\n\n` +
+                `🔄 Tente novamente em alguns segundos ou ` +
+                `nossa equipe entrará em contato.`
+            );
+        }
         
         await notifyOwner(
             contact.name || 'Sem nome', 
@@ -225,7 +233,7 @@ async function notifyOwner(customerName, customerNumber, message) {
 app.get('/', (req, res) => {
     res.json({
         service: 'WhatsApp IPTV Bot',
-        ai_provider: 'DeepSeek',
+        ai_provider: 'Groq (Llama 3)',  // Atualizado
         status: botStatus,
         connected_at: connectedAt,
         uptime: process.uptime(),
@@ -272,7 +280,7 @@ app.get('/health', (req, res) => {
     res.status(200).json({ 
         status: 'healthy',
         bot_status: botStatus,
-        ai_provider: 'DeepSeek',
+        ai_provider: 'Groq (Llama 3)',  // Atualizado
         timestamp: new Date().toISOString()
     });
 });
@@ -280,7 +288,7 @@ app.get('/health', (req, res) => {
 // Inicializar servidor
 app.listen(PORT, () => {
     console.log(`🚀 Servidor rodando na porta ${PORT}`);
-    console.log(`🤖 IA: DeepSeek (Gratuita)`);
+    console.log(`🤖 IA: Groq (Llama 3 - Gratuito)`);  // Atualizado
     console.log(`🌐 Health check: http://localhost:${PORT}/health`);
     console.log(`📱 QR Code: http://localhost:${PORT}/qr`);
 });

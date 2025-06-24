@@ -1,328 +1,373 @@
 const express = require('express');
 const { Client, LocalAuth } = require('whatsapp-web.js');
-const { Groq } = require("groq-sdk");
-const qrcode = require('qrcode-terminal');
-require('dotenv').config();
-
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-app.use(express.json());
-
-const groq = new Groq({
-    apiKey: process.env.GROQ_API_KEY
-});
-
-const client = new Client({
-    authStrategy: new LocalAuth({
-        dataPath: './session'
-    }),
-    puppeteer: {
-        headless: true,
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--no-first-run',
-            '--no-zygote',
-            '--single-process',
-            '--disable-gpu',
-            '--disable-web-security'
-        ]
-    }
-});
-
-let botStatus = 'Iniciando...';
-let qrCodeData = '';
-let connectedAt = null;
-
-const IPTV_CONTEXT = `
-Você é um assistente especializado em vendas de IPTV. Informações do serviço:
-
-🎯 SERVIÇO IPTV:
-- Mais de 15.000 canais nacionais e internacionais
-- Qualidade HD/4K/8K
-- Funciona em Smart TV, celular, PC, tablet
-- Filmes e séries atualizados
-- Canais premium inclusos
-- Suporte técnico 24h
-
-📺 PLANOS DISPONÍVEIS:
-
-🔹 PLANO 1 TELA:
-• 1 mês: R$ 40,00
-• 3 meses: R$ 105,00 (economize R$ 15)
-• 6 meses: R$ 200,00 (economize R$ 40)
-• 12 meses: R$ 380,00 (economize R$ 100)
-
-🔹 PLANO 2 TELAS:
-• 1 mês: R$ 70,00
-• 3 meses: R$ 180,00 (economize R$ 30)
-• 6 meses: R$ 330,00 (economize R$ 90)
-
-💰 FORMAS DE PAGAMENTO:
-- PIX
-- Cartão de crédito
-- Transferência bancária
-
-⚡ ATIVAÇÃO:
-- Teste grátis: 6 horas
-- Ativação em até 30 minutos após pagamento
-- Tutorial de instalação incluído
-
-INSTRUÇÕES:
-1. Seja sempre cordial e profissional
-2. Destaque as economias dos planos maiores
-3. Ofereça teste grátis para interessados
-4. Explique diferença entre 1 e 2 telas
-5. Para problemas técnicos, encaminhe para suporte humano
-6. Mantenha respostas objetivas (máximo 4 linhas)
-7. Use emojis para deixar mais atrativo
-
-Responda sempre em português brasileiro.
-`;
-
-client.on('qr', (qr) => {
-    console.log('📱 QR Code gerado - Escaneie com WhatsApp');
-    qrCodeData = qr;
-    qrcode.generate(qr, { small: true });
-    botStatus = 'Aguardando QR Code';
-});
-
-client.on('ready', () => {
-    console.log('✅ Bot WhatsApp conectado com sucesso!');
-    botStatus = 'Online';
-    connectedAt = new Date();
-    qrCodeData = '';
-});
-
-client.on('authenticated', () => {
-    console.log('🔐 WhatsApp autenticado');
-    botStatus = 'Autenticado';
-});
-
-client.on('disconnected', (reason) => {
-    console.log('❌ Bot desconectado:', reason);
-    botStatus = 'Desconectado';
-    connectedAt = null;
-});
-
-client.on('message', async (message) => {
-    if (message.from.includes('@g.us') || message.fromMe) return;
-    
-    const userMessage = message.body.trim();
-    const contact = await message.getContact();
-    
-    console.log(`📩 ${contact.name || contact.number}: ${userMessage}`);
-    
-    if (!userMessage) return;
-    
-    try {
-        const escalationKeywords = [
-            'não funciona', 'problema', 'travando', 'erro', 'bug',
-            'cancelar', 'reembolso', 'reclamação', 'suporte técnico',
-            'não carrega', 'lento', 'falha', 'defeito', 'ruim'
-        ];
-        
-        const needsHuman = escalationKeywords.some(keyword => 
-            userMessage.toLowerCase().includes(keyword)
-        );
-        
-        if (needsHuman) {
-            await message.reply(
-                `🔧 *Suporte Técnico Especializado*\n\n` +
-                `Identifiquei que você precisa de ajuda técnica.\n` +
-                `Nossa equipe especializada entrará em contato em breve.\n\n` +
-                `⏰ *Tempo médio de resposta:* 15 minutos\n` +
-                `📞 *Horário de atendimento:* 24 horas`
-            );
-            
-            await notifyOwner(contact.name || 'Sem nome', contact.number, userMessage);
-            return;
-        }
-        
-        const response = await groq.chat.completions.create({
-            model: "llama3-8b-8192",
-            messages: [
-                { role: "system", content: IPTV_CONTEXT },
-                { role: "user", content: userMessage }
-            ],
-            max_tokens: 300,
-            temperature: 0.7
-        });
-        
-        const botResponse = response.choices[0].message.content.trim();
-        
-        let finalResponse = botResponse;
-        
-        if (userMessage.toLowerCase().includes('preço') || 
-            userMessage.toLowerCase().includes('valor') ||
-            userMessage.toLowerCase().includes('quanto')) {
-            finalResponse += `\n\n💬 *Quer fazer um teste grátis de 6h?*\nDigite "TESTE" para começar!`;
-        }
-        
-        await message.reply(finalResponse);
-        
-    } catch (error) {
-        console.error('❌ Erro ao processar mensagem:', error);
-        
-        if (error.status === 402) {
-            await message.reply(
-                "⚠️ *Serviço Temporariamente Indisponível*\n\n" +
-                "Estamos ajustando nosso sistema de atendimento automático.\n" +
-                "Por favor, envie sua dúvida novamente em 10 minutos."
-            );
-        } else {
-            await message.reply(
-                `⚠️ *Erro Temporário*\n\n` +
-                `Desculpe, tive um problema técnico momentâneo.\n` +
-                `Nossa equipe foi notificada automaticamente.\n\n` +
-                `🔄 Tente novamente em alguns segundos ou ` +
-                `nossa equipe entrará em contato.`
-            );
-        }
-        
-        await notifyOwner(
-            contact.name || 'Sem nome', 
-            contact.number, 
-            `❌ ERRO TÉCNICO: ${userMessage}\n\nErro: ${error.message}`
-        );
-    }
-});
-
-async function notifyOwner(customerName, customerNumber, message) {
-    const ownerNumber = process.env.OWNER_PHONE;
-    if (!ownerNumber) {
-        console.log('⚠️ OWNER_PHONE não configurado');
-        return;
-    }
-    
-    const notification = 
-        `🚨 *ATENDIMENTO NECESSÁRIO*\n\n` +
-        `👤 *Cliente:* ${customerName}\n` +
-        `📱 *Número:* ${customerNumber.replace('@c.us', '')}\n` +
-        `💬 *Mensagem:*\n${message}\n\n` +
-        `📅 *Data/Hora:* ${new Date().toLocaleString('pt-BR')}\n\n` +
-        `⚡ *Responda para assumir o atendimento*`;
-    
-    try {
-        await client.sendMessage(ownerNumber, notification);
-        console.log('📤 Proprietário notificado');
-    } catch (error) {
-        console.error('❌ Erro ao notificar proprietário:', error);
-    }
-}
-
-app.get('/', (req, res) => {
-    res.json({
-        service: 'WhatsApp IPTV Bot',
-        ai_provider: 'Groq (Llama 3)',
-        status: botStatus,
-        connected_at: connectedAt,
-        uptime: process.uptime(),
-        timestamp: new Date().toISOString(),
-        version: '1.0.0'
-    });
-});
-
-app.get('/qr', (req, res) => {
-    if (qrCodeData) {
-        res.json({
-            qr_available: true,
-            qr_code: qrCodeData,
-            message: 'Escaneie o QR Code com seu WhatsApp',
-            instructions: [
-                '1. Abra o WhatsApp no seu celular',
-                '2. Vá em Configurações > Aparelhos conectados',
-                '3. Toque em "Conectar um aparelho"',
-                '4. Escaneie o QR Code'
-            ]
-        });
-    } else {
-        res.json({
-            qr_available: false,
-            message: botStatus === 'Online' ? 'Bot já conectado' : 'QR Code não disponível',
-            status: botStatus
-        });
-    }
-});
-
-app.get('/status', (req, res) => {
-    res.json({
-        status: botStatus,
-        is_connected: botStatus === 'Online',
-        connected_at: connectedAt,
-        uptime_seconds: Math.floor(process.uptime()),
-        memory_usage: process.memoryUsage(),
-        timestamp: new Date().toISOString()
-    });
-});
-
-app.get('/health', (req, res) => {
-    res.status(200).json({ 
-        status: 'healthy',
-        bot_status: botStatus,
-        ai_provider: 'Groq (Llama 3)',
-        timestamp: new Date().toISOString()
-    });
-});
-
-app.listen(PORT, () => {
-    console.log(`🚀 Servidor rodando na porta ${PORT}`);
-    console.log(`🤖 IA: Groq (Llama 3 - Gratuito)`);
-    console.log(`🌐 Health check: http://localhost:${PORT}/health`);
-    console.log(`📱 QR Code: http://localhost:${PORT}/qr`);
-});
-
-console.log('🔄 Inicializando WhatsApp...');
-client.initialize();
-
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('❌ Unhandled Rejection:', reason);
-});
-
-process.on('uncaughtException', (error) => {
-    console.error('❌ Uncaught Exception:', error);
-    process.exit(1);
-});
-
-// Adicione esta rota no server.js:
-app.get('/dashboard', (req, res) => {
-  res.send(`
-    <h1>WhatsApp Bot Dashboard</h1>
-    <p>Status: ${botStatus}</p>
-    <p>Online desde: ${connectedAt || 'Não conectado'}</p>
-    <p><a href="/qr">Conectar WhatsApp</a></p>
-    <p><a href="/status">Ver status completo</a></p>
-  `);
-});
-
 const qrcode = require('qrcode');
+const mongoose = require('mongoose');
+const dotenv = require('dotenv');
+dotenv.config();
 
-// Adicione esta rota:
-app.get('/qrcode', async (req, res) => {
-  if (!qrCodeData) {
-    return res.status(404).send('QR Code não disponível');
-  }
-  
-  try {
-    const qrImage = await qrcode.toDataURL(qrCodeData);
-    res.send(`
-      <img src="${qrImage}" alt="WhatsApp QR Code">
-      <p>Escaneie este código com seu WhatsApp</p>
-    `);
-  } catch (error) {
-    res.status(500).send('Erro ao gerar QR Code');
+// Configuração do MongoDB
+mongoose.connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+const db = mongoose.connection;
+db.on('error', console.error.bind(console, 'connection error:'));
+db.once('open', () => console.log('Connected to MongoDB'));
+
+// Modelos
+const UserSchema = new mongoose.Schema({
+  phone: String,
+  name: String,
+  plan: String,
+  expiry: Date,
+  testExpiry: Date,
+  testCredentials: {
+    login: String,
+    password: String
   }
 });
+const User = mongoose.model('User', UserSchema);
 
-// No client initialization, adicione:
+const TrialRequestSchema = new mongoose.Schema({
+  phone: String,
+  name: String,
+  createdAt: { type: Date, default: Date.now },
+  status: { type: String, default: 'pending' } // pending, sent, expired
+});
+const TrialRequest = mongoose.model('TrialRequest', TrialRequestSchema);
+
+// Configuração do cliente WhatsApp
 const client = new Client({
   authStrategy: new LocalAuth({
     dataPath: './session',
-    clientId: "bot-iptv" // Adicione um ID único
+    clientId: "iptv-bot"
   }),
-  // ... resto do código
+  puppeteer: {
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  }
 });
 
+let botStatus = 'Desconectado';
+let connectedAt = null;
+let qrCodeData = null;
+
+// Configuração do Express
+const app = express();
+app.use(express.json());
+const PORT = process.env.PORT || 3000;
+
+// Rotas
+app.get('/', (req, res) => {
+  res.send(`
+    <h1>🤖 Bot WhatsApp IPTV</h1>
+    <p>Status: ${botStatus}</p>
+    <p>Online desde: ${connectedAt || 'N/A'}</p>
+    <p><a href="/qr">Conectar WhatsApp</a></p>
+    <p><a href="/dashboard">Dashboard Admin</a></p>
+  `);
+});
+
+app.get('/dashboard', (req, res) => {
+  res.send(`
+    <h1>📊 Dashboard Admin</h1>
+    
+    <h2>Enviar Teste TV</h2>
+    <form action="/send-trial" method="post">
+      <input type="text" name="phone" placeholder="Número (5511999999999)" required>
+      <button type="submit">Enviar Teste TV</button>
+    </form>
+    
+    <h2>Solicitações de Teste</h2>
+    <div id="trial-requests">
+      <p><a href="/trial-requests">Ver solicitações</a></p>
+    </div>
+    
+    <h2>Verificar Cliente</h2>
+    <form action="/check-user" method="post">
+      <input type="text" name="phone" placeholder="Número (5511999999999)" required>
+      <button type="submit">Verificar</button>
+    </form>
+  `);
+});
+
+app.get('/trial-requests', async (req, res) => {
+  const requests = await TrialRequest.find().sort({ createdAt: -1 });
+  let html = '<h1>Solicitações de Teste</h1><table border="1"><tr><th>Número</th><th>Nome</th><th>Data</th><th>Status</th></tr>';
+  
+  requests.forEach(req => {
+    html += `<tr>
+      <td>${req.phone}</td>
+      <td>${req.name || 'N/A'}</td>
+      <td>${req.createdAt.toLocaleString()}</td>
+      <td>${req.status}</td>
+    </tr>`;
+  });
+  
+  html += '</table>';
+  res.send(html);
+});
+
+app.post('/send-trial', async (req, res) => {
+  const { phone } = req.body;
+  await sendTrialCredentials(phone);
+  res.send('Credenciais de teste enviadas com sucesso!');
+});
+
+// Inicialização
+client.initialize();
+
+client.on('qr', qr => {
+  qrCodeData = qr;
+  botStatus = 'Aguardando leitura do QR Code';
+  console.log('QR Code recebido');
+});
+
+client.on('authenticated', () => {
+  botStatus = 'Autenticado';
+  console.log('Autenticado');
+});
+
+client.on('ready', () => {
+  botStatus = 'Conectado';
+  connectedAt = new Date();
+  console.log('Cliente pronto!');
+});
+
+// Função para enviar menu principal
+async function sendMainMenu(chatId) {
+  const menuMessage = `
+*Olá, seja bem-vindo ao nosso atendimento virtual!* 👋
+
+*Por favor, digite um número por vez para navegar pelo menu principal:*
+
+0️⃣1️⃣ | *Como funciona?*
+0️⃣2️⃣ | *Plano TV* 📺
+0️⃣3️⃣ | *Plano Internet Ilimitada* 🛰️
+0️⃣4️⃣ | *Forma de pagamento* 💰
+0️⃣5️⃣ | *Perguntas frequentes* ⁉️
+0️⃣6️⃣ | *Download de Apps* 🆓️
+0️⃣7️⃣ | *Suporte* 🕵🏽‍♂️
+0️⃣8️⃣ | *Aparelhos Compatíveis TV* ✅
+#️⃣ | *Falar com um atendente* 👨🏻‍💻
+
+*Visualiza nosso site*: 
+abrela.me/promoiptv
+  `;
+  
+  await client.sendMessage(chatId, menuMessage);
+}
+
+// Função para enviar credenciais de teste
+async function sendTrialCredentials(phone) {
+  // Gerar credenciais aleatórias
+  const login = `teste${Math.floor(Math.random() * 10000)}`;
+  const password = Math.random().toString(36).slice(2, 10);
+  
+  const message = `
+⚡ *TESTE GRÁTIS TV* ⚡
+
+Seu acesso de teste foi liberado!
+
+📺 *Servidor:* premium-iptv.com
+👤 *Usuário:* ${login}
+🔑 *Senha:* ${password}
+⏱️ *Validade:* 4 horas
+
+📲 *App de instalação:*
+https://abrela.me/digital+
+
+Aproveite para testar nosso serviço! Qualquer dúvida, estamos à disposição.
+  `;
+  
+  await client.sendMessage(`${phone}@c.us`, message);
+  
+  // Registrar no banco de dados
+  await TrialRequest.findOneAndUpdate(
+    { phone },
+    { 
+      status: 'sent',
+      $setOnInsert: { createdAt: new Date() }
+    },
+    { upsert: true, new: true }
+  );
+}
+
+// Handler de mensagens
+client.on('message', async message => {
+  // Ignorar mensagens do próprio bot
+  if (message.fromMe) return;
+  
+  const phone = message.from.replace('@c.us', '');
+  const body = message.body.trim();
+  
+  // Comandos admin (apenas do número owner)
+  if (message.from === process.env.OWNER_PHONE && body.toLowerCase().startsWith('enviar teste')) {
+    const phone = body.split(' ')[2];
+    if (phone) {
+      await sendTrialCredentials(phone);
+      await message.reply(`✅ Teste enviado para ${phone}`);
+    }
+    return;
+  }
+  
+  // Comando para solicitar teste TV
+  if (body.toLowerCase().includes('teste tv') || body.toLowerCase().includes('quero teste tv')) {
+    // Registrar solicitação
+    const name = body.replace(/teste tv/gi, '').trim();
+    await TrialRequest.create({ phone, name });
+    
+    await message.reply(`
+✅ *Solicitação de teste registrada!*
+Aguarde enquanto preparamos seu acesso. Você receberá as credenciais em instantes.
+    `);
+    
+    // Enviar para o admin (opcional)
+    await client.sendMessage(
+      process.env.OWNER_PHONE,
+      `⚠️ *NOVA SOLICITAÇÃO DE TESTE TV* ⚠️\n\n` +
+      `Cliente: ${name || 'Não informado'}\n` +
+      `Número: ${phone}\n\n` +
+      `Para enviar as credenciais, responda:\n` +
+      `"enviar teste ${phone}"`
+    );
+    
+    return;
+  }
+  
+  // Respostas do menu
+  const menuResponses = {
+    '01': `*COMO FUNCIONA?* 🤔\n\n` +
+          `Nosso serviço de TV oferece:\n` +
+          `- 📺 +15.000 canais HD/4K\n` +
+          `- 🎬 Filmes e séries atualizados\n` +
+          `- ⚡ Funcionamento 24h\n` +
+          `- 📱 Suporte em todos os dispositivos\n\n` +
+          `*PLANO INTERNET ILIMITADA* 🛰️:\n` +
+          `- 🌐 Dados ilimitados no seu celular\n` +
+          `- 🚫 Sem franquia de uso\n` +
+          `- ⚡ Velocidade de até 5G (depende da cobertura)\n` +
+          `- 📶 Funciona em qualquer operadora`,
+    
+    '02': `*PLANOS TV* 📺\n\n` +
+          `🔥 *PLANO BÁSICO*:\n` +
+          `- 1 tela: *R$ 40,00/mês*\n` +
+          `- Canais essenciais\n\n` +
+          `🔥 *PLANO PREMIUM*:\n` +
+          `- 1 tela: *R$ 60,00/mês*\n` +
+          `- Todos os canais + filmes\n\n` +
+          `💡 *PROMOÇÃO*:\n` +
+          `- 3 meses: *R$ 150,00* (economize R$ 30)\n` +
+          `- 6 meses: *R$ 280,00* (economize R$ 80)\n\n` +
+          `Para testar nosso serviço, digite *TESTE TV*`,
+    
+    '03': `*PLANO INTERNET ILIMITADA* 🛰️\n\n` +
+          `🌐 *PLANO MENSAL*:\n` +
+          `- *R$ 25,00/mês*\n` +
+          `- Dados ilimitados\n` +
+          `- Velocidade média de 10 Mbps\n\n` +
+          `🌐 *PLANO TRIMESTRAL*:\n` +
+          `- *R$ 65,00/3 meses* (economize R$ 10)\n\n` +
+          `💡 *ATENÇÃO*:\n` +
+          `- Funciona apenas em celulares Android\n` +
+          `- Não é banda larga para residência`,
+    
+    '04': `*FORMAS DE PAGAMENTO* 💰\n\n` +
+          `*Para pagar com PIX:*\n\n` +
+          `Nome: Bruno Santos\n` +
+          `Banco: PicPay\n\n` +
+          `*Valores:*\n` +
+          `- TV: R$ 40,00 (básico) ou R$ 60,00 (premium)\n` +
+          `- Internet: R$ 25,00\n\n` +
+          `*Chave PIX aleatória:*\n` +
+          `e8f54c2a-4f0d-4b12-9b5b-7317dba8d1eb\n\n` +
+          `⚠️ *OBS: Envie o comprovante para liberação!*\n` +
+          `⚠️ *Sem comprovante não há liberação.*\n\n` +
+          `Para ver a chave PIX novamente, digite *PIX*`,
+    
+    '05': `*PERGUNTAS FREQUENTES* ⁉️\n\n` +
+          `1️⃣ *Posso usar o mesmo login em vários aparelhos?*\n` +
+          `➡️ NÃO, logins são individuais.\n\n` +
+          `2️⃣ *Diferença entre nosso acesso e operadoras tradicionais?*\n` +
+          `➡️ Nas operadoras você paga por mega. Aqui é ilimitado por valor fixo.\n\n` +
+          `3️⃣ *Posso compartilhar minha internet?*\n` +
+          `➡️ NÃO, planos são individuais. Para mais aparelhos, contrate planos adicionais.\n\n` +
+          `4️⃣ *Formas de pagamento?*\n` +
+          `➡️ PIX, transferência ou boleto.\n\n` +
+          `5️⃣ *Como solicitar suporte?*\n` +
+          `➡️ Informe: canal, qualidade, filme/série, capítulo/episódio, servidor e problema.\n\n` +
+          `6️⃣ *Tem fidelidade?*\n` +
+          `➡️ NÃO, pode cancelar quando quiser.\n\n` +
+          `7️⃣ *Vendem internet banda larga?*\n` +
+          `➡️ NÃO, apenas para celular Android.\n\n` +
+          `⚠️ *Após pagamento não há reembolso. Faça teste antes!*`,
+    
+    '06': `*DOWNLOAD DE APPS* 🆓️\n\n` +
+          `*Atenção: Não instalamos pela Play Store.*\n\n` +
+          `📱 *Para Android:*\n` +
+          `1. Abra o Chrome\n` +
+          `2. Acesse: https://abrela.me/digital+\n` +
+          `3. Baixe e instale o app\n\n` +
+          `📺 *Para Smart TV:*\n` +
+          `- LG: Loja de apps > Buscar > iboplayer\n` +
+          `- Samsung: Loja de apps > Buscar > iboplayer\n` +
+          `(custo adicional de R$20,00/ano)\n\n` +
+          `*Após instalar, digite TESTE TV para receber acesso.*`,
+    
+    '07': `*SUPORTE* 🕵🏽‍♂️\n\n` +
+          `*Problemas comuns:*\n\n` +
+          `1️⃣ *TV travando?*\n` +
+          `➡️ Desligue roteador e aparelho por 5 minutos.\n\n` +
+          `2️⃣ *Canal/filme não funciona?*\n` +
+          `➡️ Mude a qualidade (SD/HD/FHD) ou informe:\n` +
+          `   - Nome do canal/filme\n` +
+          `   - Episódio/capítulo\n` +
+          `   - Servidor usado\n` +
+          `   - Imagem/vídeo do erro\n\n` +
+          `3️⃣ *Acesso não funciona?*\n` +
+          `➡️ Verifique vencimento do plano.`,
+    
+    '08': `*APARELHOS COMPATÍVEIS* ✅\n\n` +
+          `- Computador: ✅\n` +
+          `- iPhone/iPad: ✅\n` +
+          `- Smart TV LG: ✅\n` +
+          `- Smart TV Samsung (Tizen 2018+): ✅ (custo adicional R$20/ano)\n` +
+          `- Android (celular/tablet): ✅\n` +
+          `- TV Box: ✅\n` +
+          `- Fire Stick: ✅\n` +
+          `- Smart TV TCL: ✅\n` +
+          `- Xbox/PS4: ✅\n\n` +
+          `⚠️ *Smart TVs: custo adicional de R$20,00/ano (app iboplayer)*`,
+    
+    '#': `👨‍💼 *ATENDIMENTO HUMANO* 👨‍💼\n\n` +
+         `Você será atendido por nosso especialista em breve.\n\n` +
+         `⏱️ Aguarde alguns instantes...`
+  };
+  
+  if (menuResponses[body]) {
+    await message.reply(menuResponses[body]);
+    
+    // Se não for a opção de atendente, enviar menu principal novamente
+    if (body !== '#') {
+      await sendMainMenu(message.from);
+    } else {
+      // Notificar o admin sobre solicitação de atendente
+      await client.sendMessage(
+        process.env.OWNER_PHONE,
+        `⚠️ *SOLICITAÇÃO DE ATENDENTE HUMANO* ⚠️\n\n` +
+        `Cliente: ${phone}\n` +
+        `Por favor, entre em contato!`
+      );
+    }
+    return;
+  }
+  
+  // Resposta para PIX
+  if (body.toLowerCase() === 'pix') {
+    await message.reply(menuResponses['04']);
+    await sendMainMenu(message.from);
+    return;
+  }
+  
+  // Se não for um comando conhecido, enviar menu principal
+  await sendMainMenu(message.from);
+});
+
+// Inicializar servidor
+app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));

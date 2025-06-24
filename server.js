@@ -1,3 +1,17 @@
+// Adicione no topo do arquivo:
+const DB_USER = process.env.DB_USER;
+const DB_PASSWORD = process.env.DB_PASSWORD;
+const DB_NAME = process.env.DB_NAME;
+
+// Reconstrua a URI:
+const MONGODB_URI = `mongodb+srv://${DB_USER}:${DB_PASSWORD}@cluster0.xxxxx.mongodb.net/${DB_NAME}?retryWrites=true&w=majority`;
+
+// Use assim:
+mongoose.connect(MONGODB_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+});
+
 const express = require('express');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const mongoose = require('mongoose');

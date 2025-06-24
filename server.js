@@ -1,15 +1,24 @@
 const express = require('express');
 const { Client, LocalAuth } = require('whatsapp-web.js');
-const qrcode = require('qrcode');
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 dotenv.config();
 
+// Configuração simplificada para o Render
+const qrCodeGeneration = {
+  toDataURL: async (qr) => {
+    return `data:image/png;base64,${Buffer.from(qr).toString('base64')}`;
+  }
+};
+
 // Configuração do MongoDB
-mongoose.connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+mongoose.connect(process.env.MONGODB_URI, { 
+  useNewUrlParser: true, 
+  useUnifiedTopology: true 
+});
 const db = mongoose.connection;
-db.on('error', console.error.bind(console, 'connection error:'));
-db.once('open', () => console.log('Connected to MongoDB'));
+db.on('error', console.error.bind(console, 'Erro de conexão:'));
+db.once('open', () => console.log('Conectado ao MongoDB'));
 
 // Modelos
 const UserSchema = new mongoose.Schema({
@@ -29,18 +38,28 @@ const TrialRequestSchema = new mongoose.Schema({
   phone: String,
   name: String,
   createdAt: { type: Date, default: Date.now },
-  status: { type: String, default: 'pending' } // pending, sent, expired
+  status: { type: String, default: 'pending' }
 });
 const TrialRequest = mongoose.model('TrialRequest', TrialRequestSchema);
 
 // Configuração do cliente WhatsApp
 const client = new Client({
   authStrategy: new LocalAuth({
-    dataPath: './session',
-    clientId: "iptv-bot"
+    clientId: "iptv-bot",
+    dataPath: './session'
   }),
   puppeteer: {
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
+    headless: true,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-accelerated-2d-canvas',
+      '--no-first-run',
+      '--no-zygote',
+      '--single-process',
+      '--disable-gpu'
+    ]
   }
 });
 
@@ -51,6 +70,7 @@ let qrCodeData = null;
 // Configuração do Express
 const app = express();
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 const PORT = process.env.PORT || 3000;
 
 // Rotas
@@ -59,12 +79,23 @@ app.get('/', (req, res) => {
     <h1>🤖 Bot WhatsApp IPTV</h1>
     <p>Status: ${botStatus}</p>
     <p>Online desde: ${connectedAt || 'N/A'}</p>
-    <p><a href="/qr">Conectar WhatsApp</a></p>
     <p><a href="/dashboard">Dashboard Admin</a></p>
   `);
 });
 
-app.get('/dashboard', (req, res) => {
+app.get('/dashboard', async (req, res) => {
+  const requests = await TrialRequest.find().sort({ createdAt: -1 }).limit(10);
+  
+  let requestsHtml = '';
+  requests.forEach(req => {
+    requestsHtml += `<tr>
+      <td>${req.phone}</td>
+      <td>${req.name || 'N/A'}</td>
+      <td>${req.createdAt.toLocaleString()}</td>
+      <td>${req.status}</td>
+    </tr>`;
+  });
+  
   res.send(`
     <h1>📊 Dashboard Admin</h1>
     
@@ -74,60 +105,33 @@ app.get('/dashboard', (req, res) => {
       <button type="submit">Enviar Teste TV</button>
     </form>
     
-    <h2>Solicitações de Teste</h2>
-    <div id="trial-requests">
-      <p><a href="/trial-requests">Ver solicitações</a></p>
-    </div>
+    <h2>Últimas Solicitações de Teste</h2>
+    <table border="1" style="width:100%">
+      <tr>
+        <th>Número</th>
+        <th>Nome</th>
+        <th>Data</th>
+        <th>Status</th>
+      </tr>
+      ${requestsHtml}
+    </table>
     
-    <h2>Verificar Cliente</h2>
-    <form action="/check-user" method="post">
-      <input type="text" name="phone" placeholder="Número (5511999999999)" required>
-      <button type="submit">Verificar</button>
-    </form>
+    <style>
+      table { border-collapse: collapse; margin: 20px 0; }
+      th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
+      tr:hover { background-color: #f5f5f5; }
+    </style>
   `);
-});
-
-app.get('/trial-requests', async (req, res) => {
-  const requests = await TrialRequest.find().sort({ createdAt: -1 });
-  let html = '<h1>Solicitações de Teste</h1><table border="1"><tr><th>Número</th><th>Nome</th><th>Data</th><th>Status</th></tr>';
-  
-  requests.forEach(req => {
-    html += `<tr>
-      <td>${req.phone}</td>
-      <td>${req.name || 'N/A'}</td>
-      <td>${req.createdAt.toLocaleString()}</td>
-      <td>${req.status}</td>
-    </tr>`;
-  });
-  
-  html += '</table>';
-  res.send(html);
 });
 
 app.post('/send-trial', async (req, res) => {
   const { phone } = req.body;
-  await sendTrialCredentials(phone);
-  res.send('Credenciais de teste enviadas com sucesso!');
-});
-
-// Inicialização
-client.initialize();
-
-client.on('qr', qr => {
-  qrCodeData = qr;
-  botStatus = 'Aguardando leitura do QR Code';
-  console.log('QR Code recebido');
-});
-
-client.on('authenticated', () => {
-  botStatus = 'Autenticado';
-  console.log('Autenticado');
-});
-
-client.on('ready', () => {
-  botStatus = 'Conectado';
-  connectedAt = new Date();
-  console.log('Cliente pronto!');
+  try {
+    await sendTrialCredentials(phone);
+    res.send('✅ Credenciais de teste enviadas com sucesso!');
+  } catch (error) {
+    res.status(500).send('❌ Erro ao enviar credenciais: ' + error.message);
+  }
 });
 
 // Função para enviar menu principal
@@ -157,7 +161,7 @@ abrela.me/promoiptv
 // Função para enviar credenciais de teste
 async function sendTrialCredentials(phone) {
   // Gerar credenciais aleatórias
-  const login = `teste${Math.floor(Math.random() * 10000)}`;
+  const login = `teste${Math.floor(1000 + Math.random() * 9000)}`;
   const password = Math.random().toString(36).slice(2, 10);
   
   const message = `
@@ -178,14 +182,11 @@ Aproveite para testar nosso serviço! Qualquer dúvida, estamos à disposição.
   
   await client.sendMessage(`${phone}@c.us`, message);
   
-  // Registrar no banco de dados
+  // Atualizar status no banco de dados
   await TrialRequest.findOneAndUpdate(
     { phone },
-    { 
-      status: 'sent',
-      $setOnInsert: { createdAt: new Date() }
-    },
-    { upsert: true, new: true }
+    { status: 'sent' },
+    { new: true }
   );
 }
 
@@ -195,22 +196,27 @@ client.on('message', async message => {
   if (message.fromMe) return;
   
   const phone = message.from.replace('@c.us', '');
-  const body = message.body.trim();
+  const body = message.body.trim().toLowerCase();
   
   // Comandos admin (apenas do número owner)
-  if (message.from === process.env.OWNER_PHONE && body.toLowerCase().startsWith('enviar teste')) {
-    const phone = body.split(' ')[2];
-    if (phone) {
-      await sendTrialCredentials(phone);
-      await message.reply(`✅ Teste enviado para ${phone}`);
+  if (message.from === process.env.OWNER_PHONE && body.startsWith('enviar teste')) {
+    const targetPhone = body.split(' ')[2];
+    if (targetPhone) {
+      await sendTrialCredentials(targetPhone);
+      await message.reply(`✅ Teste enviado para ${targetPhone}`);
     }
     return;
   }
   
   // Comando para solicitar teste TV
-  if (body.toLowerCase().includes('teste tv') || body.toLowerCase().includes('quero teste tv')) {
+  if (body.includes('teste tv') || body.includes('quero teste tv')) {
+    // Extrair nome da mensagem
+    let name = 'Não informado';
+    if (body.includes('teste tv')) {
+      name = body.replace('teste tv', '').replace('quero', '').trim();
+    }
+    
     // Registrar solicitação
-    const name = body.replace(/teste tv/gi, '').trim();
     await TrialRequest.create({ phone, name });
     
     await message.reply(`
@@ -218,15 +224,17 @@ client.on('message', async message => {
 Aguarde enquanto preparamos seu acesso. Você receberá as credenciais em instantes.
     `);
     
-    // Enviar para o admin (opcional)
-    await client.sendMessage(
-      process.env.OWNER_PHONE,
-      `⚠️ *NOVA SOLICITAÇÃO DE TESTE TV* ⚠️\n\n` +
-      `Cliente: ${name || 'Não informado'}\n` +
-      `Número: ${phone}\n\n` +
-      `Para enviar as credenciais, responda:\n` +
-      `"enviar teste ${phone}"`
-    );
+    // Enviar notificação para o admin
+    if (process.env.OWNER_PHONE) {
+      await client.sendMessage(
+        process.env.OWNER_PHONE,
+        `⚠️ *NOVA SOLICITAÇÃO DE TESTE TV* ⚠️\n\n` +
+        `Cliente: ${name}\n` +
+        `Número: ${phone}\n\n` +
+        `Para enviar as credenciais, digite:\n` +
+        `"enviar teste ${phone}"`
+      );
+    }
     
     return;
   }
@@ -340,13 +348,19 @@ Aguarde enquanto preparamos seu acesso. Você receberá as credenciais em instan
          `⏱️ Aguarde alguns instantes...`
   };
   
-  if (menuResponses[body]) {
-    await message.reply(menuResponses[body]);
+  // Tratamento para números com e sem emojis
+  const normalizedInput = body
+    .replace(/[️⃣]/g, '') // Remove emojis de número
+    .replace(/\D/g, '')   // Mantém apenas dígitos
+    .slice(0, 2);         // Pega os dois primeiros dígitos
+
+  if (menuResponses[normalizedInput]) {
+    await message.reply(menuResponses[normalizedInput]);
     
     // Se não for a opção de atendente, enviar menu principal novamente
-    if (body !== '#') {
+    if (normalizedInput !== '#') {
       await sendMainMenu(message.from);
-    } else {
+    } else if (process.env.OWNER_PHONE) {
       // Notificar o admin sobre solicitação de atendente
       await client.sendMessage(
         process.env.OWNER_PHONE,
@@ -359,7 +373,7 @@ Aguarde enquanto preparamos seu acesso. Você receberá as credenciais em instan
   }
   
   // Resposta para PIX
-  if (body.toLowerCase() === 'pix') {
+  if (body === 'pix') {
     await message.reply(menuResponses['04']);
     await sendMainMenu(message.from);
     return;
@@ -369,5 +383,34 @@ Aguarde enquanto preparamos seu acesso. Você receberá as credenciais em instan
   await sendMainMenu(message.from);
 });
 
+// Eventos do WhatsApp
+client.on('qr', qr => {
+  qrCodeData = qr;
+  botStatus = 'Aguardando leitura do QR Code';
+  console.log('QR Code recebido');
+});
+
+client.on('authenticated', () => {
+  botStatus = 'Autenticado';
+  console.log('Autenticado');
+});
+
+client.on('ready', () => {
+  botStatus = 'Conectado';
+  connectedAt = new Date();
+  console.log('Cliente pronto!');
+});
+
+client.on('disconnected', (reason) => {
+  botStatus = 'Desconectado';
+  console.log('Cliente desconectado!', reason);
+});
+
+// Inicializar WhatsApp client
+client.initialize();
+
 // Inicializar servidor
-app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Servidor rodando na porta ${PORT}`);
+  console.log(`Acesse: http://localhost:${PORT}`);
+});

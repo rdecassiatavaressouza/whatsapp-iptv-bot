@@ -1,3 +1,10 @@
+// server.js
+const express = require('express');
+const { Client, LocalAuth } = require('whatsapp-web.js');
+const mongoose = require('mongoose');
+const dotenv = require('dotenv');
+dotenv.config();
+
 // Adicione no topo do arquivo:
 const DB_USER = process.env.DB_USER;
 const DB_PASSWORD = process.env.DB_PASSWORD;
@@ -5,18 +12,6 @@ const DB_NAME = process.env.DB_NAME;
 
 // Reconstrua a URI:
 const MONGODB_URI = `mongodb+srv://${DB_USER}:${DB_PASSWORD}@cluster0.xxxxx.mongodb.net/${DB_NAME}?retryWrites=true&w=majority`;
-
-// Use assim:
-mongoose.connect(MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-});
-
-const express = require('express');
-const { Client, LocalAuth } = require('whatsapp-web.js');
-const mongoose = require('mongoose');
-const dotenv = require('dotenv');
-dotenv.config();
 
 // Configuração simplificada para o Render
 const qrCodeGeneration = {
@@ -26,9 +21,13 @@ const qrCodeGeneration = {
 };
 
 // Configuração do MongoDB
-mongoose.connect(process.env.MONGODB_URI, {
+// Use a URI reconstruída aqui
+mongoose.connect(MONGODB_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
+  // A autenticação no mongoose.connect com a URI já inclui user/password.
+  // As opções auth e authSource abaixo são redundantes se a URI estiver correta.
+  // No entanto, se você quiser mantê-las como um fallback ou para clareza, certifique-se que o authSource está correto.
   auth: {
     username: process.env.DB_USER,
     password: process.env.DB_PASSWORD
@@ -304,7 +303,7 @@ Aguarde enquanto preparamos seu acesso. Você receberá as credenciais em instan
           `- Internet: R$ 25,00\n\n` +
           `*Chave PIX aleatória:*\n` +
           `e8f54c2a-4f0d-4b12-9b5b-7317dba8d1eb\n\n` +
-          `⚠️ *OBS: Envie o comprovante para liberação!*\n` +
+          `⚠️ *OBS: Envie o comprovante para liberação!*` +
           `⚠️ *Sem comprovante não há liberação.*\n\n` +
           `Para ver a chave PIX novamente, digite *PIX*`,
     
@@ -433,4 +432,3 @@ app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
   console.log(`Acesse: http://localhost:${PORT}`);
 });
-

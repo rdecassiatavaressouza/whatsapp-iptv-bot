@@ -12,9 +12,14 @@ const qrCodeGeneration = {
 };
 
 // Configuração do MongoDB
-mongoose.connect(process.env.MONGODB_URI, { 
-  useNewUrlParser: true, 
-  useUnifiedTopology: true 
+mongoose.connect(process.env.MONGODB_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+  auth: {
+    username: process.env.DB_USER,
+    password: process.env.DB_PASSWORD
+  },
+  authSource: 'admin' // Geralmente é 'admin' no Atlas
 });
 const db = mongoose.connection;
 db.on('error', console.error.bind(console, 'Erro de conexão:'));
@@ -415,19 +420,3 @@ app.listen(PORT, () => {
   console.log(`Acesse: http://localhost:${PORT}`);
 });
 
-// Substitua esta linha:
-mongoose.connect(process.env.MONGODB_URI, { 
-  useNewUrlParser: true, 
-  useUnifiedTopology: true 
-});
-
-// Por esta:
-mongoose.connect(process.env.MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-  auth: {
-    username: process.env.DB_USER,
-    password: process.env.DB_PASSWORD
-  },
-  authSource: 'admin' // Geralmente é 'admin' no Atlas
-});

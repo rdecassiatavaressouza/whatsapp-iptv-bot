@@ -9,9 +9,11 @@ dotenv.config();
 const DB_USER = process.env.DB_USER;
 const DB_PASSWORD = process.env.DB_PASSWORD;
 const DB_NAME = process.env.DB_NAME;
+const MONGODB_CLUSTER_ADDRESS = process.env.MONGODB_CLUSTER_ADDRESS; // NEW: The actual cluster address from MongoDB Atlas
+const OWNER_PHONE = process.env.OWNER_PHONE; // Your phone number for admin notifications
 
 // Reconstrua a URI:
-const MONGODB_URI = `mongodb+srv://${DB_USER}:${DB_PASSWORD}@cluster0.xxxxx.mongodb.net/${DB_NAME}?retryWrites=true&w=majority`;
+const MONGODB_URI = `mongodb+srv://${DB_USER}:${DB_PASSWORD}@${MONGODB_CLUSTER_ADDRESS}/${DB_NAME}?retryWrites=true&w=majority`;
 
 // Configuração simplificada para o Render
 const qrCodeGeneration = {
@@ -23,8 +25,6 @@ const qrCodeGeneration = {
 // Configuração do MongoDB
 // Use a URI reconstruída aqui
 mongoose.connect(MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
   // A autenticação no mongoose.connect com a URI já inclui user/password.
   // As opções auth e authSource abaixo são redundantes se a URI estiver correta.
   // No entanto, se você quiser mantê-las como um fallback ou para clareza, certifique-se que o authSource está correto.
@@ -217,7 +217,7 @@ client.on('message', async message => {
   const body = message.body.trim().toLowerCase();
   
   // Comandos admin (apenas do número owner)
-  if (message.from === process.env.OWNER_PHONE && body.startsWith('enviar teste')) {
+  if (message.from === `${OWNER_PHONE}@c.us` && body.startsWith('enviar teste')) {
     const targetPhone = body.split(' ')[2];
     if (targetPhone) {
       await sendTrialCredentials(targetPhone);
@@ -243,9 +243,9 @@ Aguarde enquanto preparamos seu acesso. Você receberá as credenciais em instan
     `);
     
     // Enviar notificação para o admin
-    if (process.env.OWNER_PHONE) {
+    if (OWNER_PHONE) {
       await client.sendMessage(
-        process.env.OWNER_PHONE,
+        `${OWNER_PHONE}@c.us`,
         `⚠️ *NOVA SOLICITAÇÃO DE TESTE TV* ⚠️\n\n` +
         `Cliente: ${name}\n` +
         `Número: ${phone}\n\n` +
@@ -378,10 +378,10 @@ Aguarde enquanto preparamos seu acesso. Você receberá as credenciais em instan
     // Se não for a opção de atendente, enviar menu principal novamente
     if (normalizedInput !== '#') {
       await sendMainMenu(message.from);
-    } else if (process.env.OWNER_PHONE) {
+    } else if (OWNER_PHONE) {
       // Notificar o admin sobre solicitação de atendente
       await client.sendMessage(
-        process.env.OWNER_PHONE,
+        `${OWNER_PHONE}@c.us`,
         `⚠️ *SOLICITAÇÃO DE ATENDENTE HUMANO* ⚠️\n\n` +
         `Cliente: ${phone}\n` +
         `Por favor, entre em contato!`

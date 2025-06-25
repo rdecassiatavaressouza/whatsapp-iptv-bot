@@ -285,7 +285,7 @@ client.on('message', async (message) => {
 
     // --- Respostas do Menu ---
     const menuResponses = {
-      '01': `*COMO FUNCIONA?* 🤔\n\nNosso serviço de TV oferece:\n- � +15.000 canais HD/4K\n- 🎬 Filmes e séries atualizados\n- ⚡ Funcionamento 24h\n- 📱 Suporte em todos os dispositivos\n\n*PLANO INTERNET ILIMITADA* 🛰️:\n- 🌐 Dados ilimitados no seu celular\n- 🚫 Sem franquia de uso\n- ⚡ Velocidade de até 5G (depende da cobertura)\n- 📶 Funciona em qualquer operadora`,
+      '01': `*COMO FUNCIONA?* 🤔\n\nNosso serviço de TV oferece:\n- 📺 +15.000 canais HD/4K\n- 🎬 Filmes e séries atualizados\n- ⚡ Funcionamento 24h\n- 📱 Suporte em todos os dispositivos\n\n*PLANO INTERNET ILIMITADA* 🛰️:\n- 🌐 Dados ilimitados no seu celular\n- 🚫 Sem franquia de uso\n- ⚡ Velocidade de até 5G (depende da cobertura)\n- 📶 Funciona em qualquer operadora`,
       '02': `*PLANOS TV* 📺\n\n🔥 *PLANO BÁSICO*:\n- 1 tela: *R$ 40,00/mês*\n- Canais essenciais\n\n🔥 *PLANO PREMIUM*:\n- 1 tela: *R$ 60,00/mês*\n- Todos os canais + filmes\n\n💡 *PROMOÇÃO*:\n- 3 meses: *R$ 150,00* (economize R$ 30)\n- 6 meses: *R$ 280,00* (economize R$ 80)\n\nPara testar nosso serviço, digite *TESTE TV*`,
       '03': `*PLANO INTERNET ILIMITADA* 🛰️\n\n🌐 *PLANO MENSAL*:\n- *R$ 25,00/mês*\n- Dados ilimitados\n- Velocidade média de 10 Mbps\n\n🌐 *PLANO TRIMESTRAL*:\n- *R$ 65,00/3 meses* (economize R$ 10)\n\n💡 *ATENÇÃO*:\n- Funciona apenas em celulares Android\n- Não é banda larga para residência`,
       '04': `*FORMAS DE PAGAMENTO* 💰\n\n*Para pagar com PIX:*\n\nNome: Bruno Santos\nBanco: PicPay\n\n*Valores:*\n- TV: R$ 40,00 (básico) ou R$ 60,00 (premium)\n- Internet: R$ 25,00\n\n*Chave PIX aleatória:*\ne8f54c2a-4f0d-4b12-9b5b-7317dba8d1eb\n\n⚠️ *OBS: Envie o comprovante para liberação!*⚠️ *Sem comprovante não há liberação.*\n\nPara ver a chave PIX novamente, digite *PIX*`,
@@ -327,4 +327,3 @@ app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
   console.log(`Para visualizar o status ou QR Code, acesse a URL do seu serviço.`);
 });
-�

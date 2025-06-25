@@ -222,6 +222,8 @@ client.on('auth_failure', (msg) => {
 
 // --- Manipulador Principal de Mensagens ---
 client.on('message', async (message) => {
+  console.log(`--- MENSAGEM RECEBIDA de ${message.from}: "${message.body}" ---`); // <-- ADICIONE ESTA LINHA
+
   if (message.from.endsWith('@g.us') || message.fromMe || !message.body) {
     return;
   }

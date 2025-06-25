@@ -23,21 +23,23 @@ const qrCodeGeneration = {
 };
 
 // Configuração do MongoDB
-// Use a URI reconstruída aqui
-mongoose.connect(MONGODB_URI, {
-  // A autenticação no mongoose.connect com a URI já inclui user/password.
-  // As opções auth e authSource abaixo são redundantes se a URI estiver correta.
-  // No entanto, se você quiser mantê-las como um fallback ou para clareza, certifique-se que o authSource está correto.
-  auth: {
-    username: process.env.DB_USER,
-    password: process.env.DB_PASSWORD
-  },
-  authSource: 'admin' // Geralmente é 'admin' no Atlas
-});
-const db = mongoose.connection;
-db.on('error', console.error.bind(console, 'Erro de conexão:'));
-db.once('open', () => console.log('Conectado ao MongoDB'));
 
+mongoose.connect(MONGODB_URI, {
+  // As opções abaixo são desnecessárias se a MONGODB_URI estiver correta.
+  // Recomendo removê-las para evitar conflitos de autenticação.
+  // auth: {
+  //   username: process.env.DB_USER,
+  //   password: process.env.DB_PASSWORD
+  // },
+  // authSource: 'admin' 
+}).catch(err => {
+  console.error('Falha inicial ao conectar ao MongoDB:', err);
+  process.exit(1); // Encerra o processo se a conexão inicial falhar
+});
+
+const db = mongoose.connection;
+db.on('error', console.error.bind(console, 'Erro de conexão com MongoDB:'));
+db.once('open', () => console.log('Conectado ao MongoDB'));
 // Modelos
 const UserSchema = new mongoose.Schema({
   phone: String,

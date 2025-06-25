@@ -9,10 +9,10 @@ dotenv.config();
 const DB_USER = process.env.DB_USER;
 const DB_PASSWORD = process.env.DB_PASSWORD;
 const DB_NAME = process.env.DB_NAME;
-const MONGODB_CLUSTER_ADDRESS = process.env.MONGODB_CLUSTER_ADDRESS; // NEW: The actual cluster address from MongoDB Atlas
-const OWNER_PHONE = process.env.OWNER_PHONE; // Your phone number for admin notifications
+const MONGODB_CLUSTER_ADDRESS = process.env.MONGODB_CLUSTER_ADDRESS; // <-- NEW
+const OWNER_PHONE = process.env.OWNER_PHONE; // Certifique-se de que esta linha está presente se ainda não estiver
 
-// Reconstrua a URI:
+// Reconstrua a URI com o endereço do cluster completo:
 const MONGODB_URI = `mongodb+srv://${DB_USER}:${DB_PASSWORD}@${MONGODB_CLUSTER_ADDRESS}/${DB_NAME}?retryWrites=true&w=majority`;
 
 // Configuração simplificada para o Render
